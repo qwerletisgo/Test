@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이미지 이어붙이기 v3.5 (Lottie 버전)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.10.2/lottie.min.js"></script>
+<style>
+body{font-family:"Pretendard","Segoe UI",sans-serif;background:#1e1e1e;color:#f0f0f0;margin:0;padding:20px;}
+h1{text-align:center;margin-bottom:10px;}
+.container{max-width:900px;margin:auto;}
+.option-box{background:rgba(50,50,50,0.85);padding:15px 20px;border-radius:12px;margin-bottom:15px;}
+button,input,select{background:#333;color:#eee;border:none;border-radius:8px;padding:6px 10px;margin:4px;}
+button:hover{background:#555;cursor:pointer;}
+button.active{background:#666;color:#fff;}
+.thumb-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.thumb{position:relative;width:120px;height:90px;overflow:hidden;border:2px solid #555;border-radius:6px;user-select:none;}
+.thumb img{width:100%;height:100%;object-fit:cover;pointer-events:none;}
+.thumb .index-label{position:absolute;top:3px;left:4px;background:rgba(0,0,0,0.7);padding:1px 4px;font-size:12px;border-radius:3px;}
+.thumb .btns{position:absolute;right:2px;bottom:2px;display:flex;gap:2px;}
+.thumb button.small{padding:2px 4px;font-size:10px;}
+canvas{max-width:100%;border:1px solid #666;border-radius:8px;margin-top:10px;}
+#timer{text-align:center;color:#aaa;margin-top:5px;}
+#loadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);display:none;flex-direction:column;justify-content:center;align-items:center;z-index:999;text-align:center;transition:opacity 0.4s ease;opacity:0;}
+#loadingOverlay.show{display:flex;opacity:1;}
+#modeBtn{float:right;background:#2a2a2a;border:1px solid #555;}
+#lottie{width:200px;height:200px;margin-bottom:15px;}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>이미지 이어붙이기 v3.5</h1>
+  <button id="modeBtn">현재: 세로모드 🔽</button>
+
+  <div class="option-box">
+    <h3>① 이미지 업로드</h3>
+    <input type="file" id="fileInput" multiple accept="image/*"><br>
+    <small>썸네일 ↻ 회전 / ❌ 삭제 / 드래그 순서 변경 가능</small><br>
+    <button id="sortName">이름순 정렬</button>
+    <button id="sortNameReverse">역순 정렬</button>
+    <div id="thumbContainer" class="thumb-list"></div>
+  </div>
+
+  <div class="option-box">
+    <h3>② 옵션 설정</h3>
+    <div>
+      <label>가로 크기:</label>
+      <button class="widthBtn" data-width="auto">자동</button>
+      <button class="widthBtn" data-width="720">720</button>
+      <button class="widthBtn" data-width="1280">1280 (추천)</button>
+      <button class="widthBtn" data-width="1920">1920</button>
+      <button class="widthBtn" data-width="2560">2560</button>
+      <button class="widthBtn" data-width="3840">3840</button>
+      <input type="number" id="customWidth" placeholder="수동입력(px)" style="width:120px">
+    </div>
+    <div>
+      <label>비율 조정:</label>
+      <label><input type="radio" name="scaleMode" value="keep" checked> 비율 유지</label>
+      <label><input type="radio" name="scaleMode" value="stretch"> 폭 강제 (비율 무시)</label>
+    </div>
+    <div>
+      <label>이미지 간격(px):</label>
+      <input type="number" id="gapInput" value="0" min="0" style="width:70px">
+    </div>
+    <div>
+      <label>저장 형식:</label>
+      <label><input type="radio" name="format" value="image/jpeg" checked> JPEG</label>
+      <label><input type="radio" name="format" value="image/png"> PNG</label>
+      <label><input type="radio" name="format" value="image/webp"> WebP</label>
+    </div>
+  </div>
+
+  <div class="option-box">
+    <h3>③ 결과</h3>
+    <button id="mergeBtn">이미지 합치기</button>
+    <button id="downloadBtn" disabled>다운로드</button>
+    <div id="timer"></div>
+    <canvas id="resultCanvas"></canvas>
+  </div>
+</div>
+
+<!-- Lottie 로딩 오버레이 -->
+<div id="loadingOverlay">
+  <div id="lottie"></div>
+  <div style="font-size:18px;">가은이가 열심히 만들고 있어요! 💫</div>
+</div>
+
+<script>
+const fileInput=document.getElementById('fileInput');
+const thumbContainer=document.getElementById('thumbContainer');
+const mergeBtn=document.getElementById('mergeBtn');
+const downloadBtn=document.getElementById('downloadBtn');
+const canvas=document.getElementById('resultCanvas');
+const ctx=canvas.getContext('2d');
+const timerEl=document.getElementById('timer');
+const loadingOverlay=document.getElementById('loadingOverlay');
+const modeBtn=document.getElementById('modeBtn');
+let mode='vertical', images=[], selectedWidth='auto';
+
+// Lottie 로딩 애니메이션 초기화
+const lottieContainer=document.getElementById('lottie');
+let lottieAnim=lottie.loadAnimation({
+  container:lottieContainer,
+  renderer:'svg',
+  loop:true,
+  autoplay:false,
+  path:'loading.json'
+});
+
+function showLoading(show){
+  if(show){
+    loadingOverlay.classList.add('show');
+    lottieAnim.play();
+  }else{
+    loadingOverlay.classList.remove('show');
+    lottieAnim.stop();
+    setTimeout(()=>loadingOverlay.style.display='none',400);
+  }
+  if(show)loadingOverlay.style.display='flex';
+}
+
+modeBtn.onclick=()=>{
+  mode=(mode==='vertical')?'horizontal':'vertical';
+  modeBtn.textContent=mode==='vertical'?"현재: 세로모드 🔽":"현재: 가로모드 ▶️";
+};
+
+document.querySelectorAll('.widthBtn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    selectedWidth=btn.dataset.width==='auto'?'auto':parseInt(btn.dataset.width);
+    document.querySelectorAll('.widthBtn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+fileInput.addEventListener('change',()=>{
+  images=[];
+  Array.from(fileInput.files).forEach(file=>{
+    const r=new FileReader();
+    r.onload=e=>{
+      images.push({src:e.target.result,name:file.name,rotation:0});
+      renderThumbs();
+    };
+    r.readAsDataURL(file);
+  });
+});
+
+function renderThumbs(){
+  thumbContainer.innerHTML='';
+  images.forEach((imgObj,i)=>{
+    const div=document.createElement('div');div.className='thumb';div.draggable=true;div.dataset.index=i;
+    const img=document.createElement('img');img.src=imgObj.src;img.style.transform=`rotate(${imgObj.rotation}deg)`;
+    const label=document.createElement('div');label.className='index-label';label.textContent=i+1;
+    const btns=document.createElement('div');btns.className='btns';
+    const rot=document.createElement('button');rot.textContent='↻';rot.className='small';
+    rot.onclick=()=>{imgObj.rotation=(imgObj.rotation+90)%360;renderThumbs();};
+    const del=document.createElement('button');del.textContent='❌';del.className='small';
+    del.onclick=()=>{images.splice(i,1);renderThumbs();};
+    btns.appendChild(rot);btns.appendChild(del);
+    div.appendChild(img);div.appendChild(label);div.appendChild(btns);
+    thumbContainer.appendChild(div);
+    div.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',i));
+    div.addEventListener('dragover',e=>e.preventDefault());
+    div.addEventListener('drop',e=>{
+      e.preventDefault();
+      const from=parseInt(e.dataTransfer.getData('text/plain'));
+      const to=i;if(from!==to){const t=images.splice(from,1)[0];images.splice(to,0,t);renderThumbs();}
+    });
+  });
+}
+
+document.getElementById('sortName').onclick=()=>{images.sort((a,b)=>a.name.localeCompare(b.name,'ko'));renderThumbs();};
+document.getElementById('sortNameReverse').onclick=()=>{images.sort((a,b)=>b.name.localeCompare(a.name,'ko'));renderThumbs();};
+
+mergeBtn.addEventListener('click',async()=>{
+  if(images.length===0)return alert('이미지를 먼저 업로드하세요.');
+  showLoading(true);
+  const start=performance.now();
+  const gap=parseInt(document.getElementById('gapInput').value)||0;
+  const custom=parseInt(document.getElementById('customWidth').value);
+  const scaleMode=document.querySelector('input[name="scaleMode"]:checked').value;
+  const format=document.querySelector('input[name="format"]:checked').value;
+  const loaded=await Promise.all(images.map(loadImage));
+  let canvasWidth=(selectedWidth==='auto')?Math.max(...loaded.map(i=>i.width)):selectedWidth;
+  if(custom>0)canvasWidth=custom;
+
+  const scaled=[];
+  for(let img of loaded){
+    let w=img.width,h=img.height;
+    if(scaleMode==='keep'){const scale=canvasWidth/w;w*=scale;h*=scale;}
+    else if(scaleMode==='stretch'){w=canvasWidth;}
+    scaled.push({img,w,h});
+  }
+
+  if(mode==='vertical'){
+    canvas.width=canvasWidth;
+    canvas.height=scaled.reduce((s,v)=>s+v.h,0)+gap*(scaled.length-1);
+  }else{
+    canvas.height=Math.max(...scaled.map(s=>s.h));
+    canvas.width=scaled.reduce((s,v)=>s+v.w,0)+gap*(scaled.length-1);
+  }
+
+  const MAX_PIXELS=260000000;
+  if(canvas.width*canvas.height>MAX_PIXELS){
+    alert("⚠️ 이미지가 너무 커서 브라우저가 처리할 수 없습니다.\n가로 크기를 줄이세요!");
+    showLoading(false);
+    return;
+  }
+
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);
+  let pos=0;
+  for(let s of scaled){
+    if(mode==='vertical'){ctx.drawImage(s.img,0,pos,s.w,s.h);pos+=s.h+gap;}
+    else{ctx.drawImage(s.img,pos,0,s.w,s.h);pos+=s.w+gap;}
+  }
+
+  const elapsed=((performance.now()-start)/1000).toFixed(2);
+  timerEl.textContent=`처리 완료 (${elapsed}초)`;
+  showLoading(false);
+  downloadBtn.disabled=false;
+  downloadBtn.onclick=()=>{
+    canvas.toBlob(blob=>{
+      const link=document.createElement('a');
+      link.href=URL.createObjectURL(blob);
+      link.download='merged'+(format==='image/png'?'.png':format==='image/webp'?'.webp':'.jpg');
+      link.click();
+    },format,0.95);
+  };
+});
+
+function loadImage(obj){return new Promise(res=>{const i=new Image();i.onload=()=>res(i);i.src=obj.src;});}
+</script>
+</body>
+</html>
