@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>이미지 이어붙이기 v3.4 (업로드 순서 유지)</title>
+<style>
+body {font-family: "Segoe UI", sans-serif; background: #222; color:#eee; padding:20px;}
+.container{max-width:900px;margin:auto;}
+.option-box{background:#333;padding:15px;border-radius:10px;margin-bottom:15px;}
+.thumb-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;}
+.thumb{position:relative;width:120px;height:90px;overflow:hidden;border:2px solid #555;border-radius:6px;}
+.thumb img{width:100%;height:100%;object-fit:cover;transform-origin:center center;}
+.thumb .index-label{position:absolute;top:3px;left:4px;background:rgba(0,0,0,0.7);padding:1px 4px;font-size:12px;border-radius:3px;}
+.thumb .btns{position:absolute;right:2px;bottom:2px;display:flex;gap:2px;}
+.thumb button.small{padding:2px 4px;font-size:10px;}
+#loadingOverlay{position:fixed;top:0;left:0;width:100%;height:100%;display:none;justify-content:center;align-items:center;flex-direction:column;background:rgba(0,0,0,0.7);}
+#loadingOverlay img{max-width:400px;height:auto;margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>이미지 이어붙이기 v3.4</h1>
+<input type="file" id="fileInput" multiple accept="image/*">
+<div id="thumbContainer" class="thumb-list"></div>
+<button id="mergeBtn">합치기</button>
+<button id="downloadBtn" disabled>다운로드</button>
+<canvas id="resultCanvas"></canvas>
+</div>
+
+<div id="loadingOverlay">
+  <img src="loading.gif" alt="loading">
+  <div style="font-size:18px;">가은이가 열심히 만들고 있어요! 💫</div>
+</div>
+
+<script>
+const fileInput=document.getElementById('fileInput');
+const thumbContainer=document.getElementById('thumbContainer');
+const mergeBtn=document.getElementById('mergeBtn');
+const downloadBtn=document.getElementById('downloadBtn');
+const canvas=document.getElementById('resultCanvas');
+const ctx=canvas.getContext('2d');
+const loadingOverlay=document.getElementById('loadingOverlay');
+let images=[];
+
+// ✅ 업로드한 “순서”를 그대로 기억
+fileInput.addEventListener('change',()=>{
+  const files=[...fileInput.files];
+  const totalMB=files.reduce((s,f)=>s+f.size,0)/(1024*1024);
+  if(totalMB>300){alert('전체 용량이 너무 큽니다 (300MB 이하만).');return;}
+
+  // 파일 고른 “순서대로” 배열에 추가
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      images.push({src:e.target.result,name:file.name});
+      renderThumbs();
+    };
+    reader.readAsDataURL(file);
+  });
+});
+
+function renderThumbs(){
+  thumbContainer.innerHTML='';
+  images.forEach((imgObj,i)=>{
+    const div=document.createElement('div');
+    div.className='thumb';
+    const img=document.createElement('img');
+    img.src=imgObj.src;
+    const label=document.createElement('div');
+    label.className='index-label';
+    label.textContent=i+1;
+    div.appendChild(img);
+    div.appendChild(label);
+    thumbContainer.appendChild(div);
+  });
+}
+
+mergeBtn.onclick=async()=>{
+  if(images.length===0)return alert('이미지를 먼저 업로드하세요.');
+  loadingOverlay.style.display='flex';
+
+  const loaded=await Promise.all(images.map(loadImage));
+  const width=Math.max(...loaded.map(i=>i.width));
+  const height=loaded.reduce((s,i)=>s+i.height,0);
+  canvas.width=width;
+  canvas.height=height;
+  ctx.fillStyle="#fff";ctx.fillRect(0,0,width,height);
+
+  let y=0;
+  for(const img of loaded){
+    ctx.drawImage(img,0,y,img.width,img.height);
+    y+=img.height;
+  }
+  loadingOverlay.style.display='none';
+  downloadBtn.disabled=false;
+  downloadBtn.onclick=()=>{
+    const link=document.createElement('a');
+    link.download='merged.jpg';
+    link.href=canvas.toDataURL('image/jpeg',0.95);
+    link.click();
+  };
+};
+
+function loadImage(obj){
+  return new Promise(res=>{
+    const i=new Image();
+    i.onload=()=>res(i);
+    i.src=obj.src;
+  });
+}
+</script>
+</body>
+</html>
