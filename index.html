@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이미지 이어붙이기 v4.3 (미리보기 화질조정·라벨 보강)</title>
+<style>
+:root{
+  --bg:#1e1e1e; --panel:rgba(50,50,50,0.88); --text:#f0f0f0; --muted:#bbb; --border:#3a3a3a;
+  --accent:#666; --accent2:#555; --line:#555;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{font-family:"Pretendard","Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;line-height:1.45}
+h1{margin:0 0 12px;text-align:center;font-weight:600}
+.container{max-width:980px;margin:auto}
+.option-box{background:var(--panel);backdrop-filter:blur(6px);padding:18px 20px;border-radius:14px;margin:16px 0;box-shadow:0 0 10px rgba(0,0,0,.3);border:1px solid var(--border)}
+.option-box h3{margin:0 0 12px}
+button,input,select{background:#333;color:#eee;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:4px;transition:.15s;min-height:42px;touch-action:manipulation}
+button:hover{background:var(--accent2);cursor:pointer}
+button.active{background:var(--accent);color:#fff;border-color:#555}
+input[type="number"]{width:140px}
+label{margin-right:10px}
+.small{font-size:13px;color:#aaa}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:6px 0}
+.group{display:flex;flex-wrap:
