@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>이미지 이어붙이기 - 썸네일 정렬</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧩</text></svg>">
+
+<style>
+/* --- Root Variables (제공 팔레트) --- */
+:root {
+  --background-color:#f4f6f9; --panel-bg:#ffffff; --panel-border:#e0e6ed;
+  --text-primary:#2c3e50; --text-secondary:#8a95a5; --header-bg:#2c3e50;
+  --accent-primary:#3498db; --accent-primary-dark:#2980b9;
+  --accent-secondary:#2ecc71; --accent-secondary-dark:#27ae60;
+  --input-bg:#ffffff; --input-border:#dce1e6; --shadow:rgba(44,62,80,.08);
+  --inactive-tab-bg:#5f7a95;
+  --font-primary:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,'Noto Sans KR',sans-serif;
+  --font-secondary:var(--font-primary);
+
+  /* 썸네일 공통 변수 */
+  --thumbSize:120px; /* 기본 썸네일 가로폭 */
+  --thumbGap:10px;
+  --thumbCols:6;     /* 고정열 모드 */
+}
+body.dark-mode{
+  --background-color:#1c2128; --panel-bg:#2d333b; --panel-border:#444c56;
+  --text-primary:#e6edf3; --text-secondary:#909dab; --header-bg:#2d333b;
+  --accent-primary:#58a6ff; --accent-primary-dark:#388bfd;
+  --accent-secondary:#34d399; --accent-secondary-dark:#10b981;
+  --input-bg:#22272e; --input-border:#444c56; --shadow:rgba(0,0,0,.4);
+  --inactive-tab-bg:#444c56;
+}
+
+/* --- Base --- */
+*{box-sizing:border-box} html,body{height:100%}
+body{
+  margin:0; padding:16px; background:var(--background-color); color:var(--text-primary);
+  font-family:var(--font-secondary); transition:background-color .3s,color .3s;
+  display:flex; justify-content:center; align-items:flex-start;
+}
+.container{width:100%; max-width:1200px; display:flex; flex-direction:column; gap:16px}
+
+/* --- Header --- */
+.app-header{
+  position:relative; background:var(--header-bg); color:#fff; border-radius:16px;
+  padding:20px 20px 12px; box-shadow:0 8px 32px var(--shadow);
+}
+.app-header h1{margin:0 0 8px; font-size:1.4rem; font-weight:700}
+.version-info{
+  position:absolute; right:16px; top:14px; font-size:12px; opacity:.85; text-align:right;
+}
+.theme-toggle{
+  position:absolute; left:16px; top:12px;
+  display:inline-flex; align-items:center; gap:8px; padding:8px 12px;
+  background:var(--inactive-tab-bg); color:#fff; border:1px solid transparent;
+  border-radius:20px; cursor:pointer; font-weight:700; font-size:.9rem;
+}
+.theme-toggle:hover{background:var(--accent-primary)}
+.theme-toggle .sun-icon,.theme-toggle .moon-icon{display:none}
+body:not(.dark-mode) .theme-toggle .moon-icon{display:block}
+body.dark-mode .theme-toggle{background:var(--input-bg); color:var(--text-primary); border-color:var(--panel-border)}
+body.dark-mode .theme-toggle:hover{border-color:var(--accent-primary); color:var(--accent-primary)}
+body.dark-mode .theme-toggle .sun-icon{display:block}
+
+/* --- Panel --- */
+.panel{
+  background:var(--panel-bg); border:1px solid var(--panel-border);
+  border-radius:16px; box-shadow:0 8px 32px var(--shadow); padding:16px;
+}
+.section-title{
+  display:flex; align-items:center; gap:8px; font-weight:800; margin-bottom:10px;
+  border-bottom:2px solid var(--accent-primary); padding-bottom:8px;
+}
+
+/* --- Controls Row --- */
+.controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center}
+.btn{
+  appearance:none; border:1px solid var(--input-border); background:var(--input-bg);
+  color:var(--text-primary); padding:8px 12px; border-radius:8px; cursor:pointer; font-weight:700;
+}
+.btn:hover{border-color:var(--accent-primary); color:var(--accent-primary)}
+.btn-chip{border-radius:999px; font-weight:700; padding:6px 12px}
+.btn.primary{background:var(--accent-secondary); color:#fff; border-color:transparent}
+.btn.primary:hover{background:var(--accent-secondary-dark)}
+.btn.active{background:var(--accent-primary); color:#fff; border-color:var(--accent-primary)}
+.small{font-size:.85rem; color:var(--text-secondary)}
+.input{
+  background:var(--input-bg); border:1px solid var(--input-border); color:var(--text-primary);
+  border-radius:8px; padding:8px 10px; font-weight:600;
+}
+
+/* --- Upload Area --- */
+.uploader{
+  display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+  background:linear-gradient(0deg,#0000,#0000),var(--panel-bg);
+  border:1px dashed var(--panel-border); border-radius:12px; padding:12px;
+}
+.dropzone{
+  flex:1 1 260px; min-height:54px; display:flex; align-items:center; justify-content:center;
+  border:2px dashed var(--input-border); border-radius:10px; padding:10px; color:var(--text-secondary);
+}
+.dropzone.drag{border-color:var(--accent-primary); color:var(--accent-primary); background:#eaf5fc22}
+
+/* --- Thumbnail Toolbar --- */
+.toolbar{display:flex; gap:.5rem; align-items:center; flex-wrap:wrap}
+.toolbar .spacer{flex:1}
+
+/* --- Thumbnails --- */
+.thumb-wrap{
+  /* 썸네일들이 "업로드/파일 선택" 블록 바로 아래에 존재 (요청사항 반영) */
+  margin-top:8px;
+}
+.thumb-grid{
+  display:grid; gap:var(--thumbGap);
+  grid-template-columns:repeat(auto-fill, minmax(var(--thumbSize), 1fr));
+}
+.thumb-grid.fixed{ grid-template-columns:repeat(var(--thumbCols), minmax(0,1fr)); }
+.thumb-grid.film2{
+  display:grid; grid-auto-flow:column; grid-auto-columns:var(--thumbSize);
+  grid-template-rows:repeat(2, calc(var(--thumbSize) * .75));
+  overflow-x:auto; overflow-y:hidden; padding-bottom:4px; -webkit-overflow-scrolling:touch;
+}
+.thumb{
+  position:relative; width:100%; aspect-ratio:4/3; border:1px solid var(--panel-border);
+  border-radius:10px; overflow:hidden; background:#00000006;
+}
+.thumb img{
+  width:100%; height:100%; object-fit:cover; display:block; transform-origin:center center;
+  image-rendering:-webkit-optimize-contrast;
+}
+.index-badge{
+  position:absolute; top:6px; left:6px; background:rgba(0,0,0,.6); color:#fff;
+  font-size:12px; padding:3px 7px; border-radius:999px; font-weight:800
+}
+.tools{
+  position:absolute; right:6px; top:6px; display:flex; gap:6px;
+}
+.tools .btn{padding:4px 6px; font-size:12px; border-radius:7px}
+.drag-hint{
+  position:absolute; inset:auto 6px 6px auto; background:rgba(52,152,219,.12);
+  color:var(--accent-primary); font-size:11px; padding:2px 6px; border-radius:6px; border:1px solid rgba(52,152,219,.35);
+}
+
+/* --- Overlay Board (대형 정렬) --- */
+.overlay{
+  position:fixed; inset:0; background:rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center;
+  z-index:1000; padding:20px;
+}
+.hidden{display:none !important}
+.card{
+  width:min(95vw,1200px); max-height:90vh; display:flex; flex-direction:column; gap:10px;
+  background:var(--panel-bg); border:1px solid var(--panel-border); border-radius:16px; padding:14px;
+  box-shadow:0 20px 50px rgba(0,0,0,.25);
+}
+.card .head{display:flex; align-items:center; gap:.6rem}
+.card .head .spacer{flex:1}
+.board-grid{ --thumbCols:8; --thumbSize:140px; width:100%; height:70vh; overflow:auto }
+.board-grid.fixed{ grid-template-columns:repeat(var(--thumbCols), minmax(0,1fr)); }
+
+/* --- Responsive --- */
+@media (max-width: 640px){
+  body{padding:10px}
+  .app-header h1{font-size:1.1rem}
+  .theme-toggle{transform:scale(.95); transform-origin:left top}
+}
+</style>
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <div class="version-info">
+        <div>Version: 1.0.0</div>
+        <div>Last Updated: 2025-11-02</div>
+      </div>
+      <button id="themeToggle" class="theme-toggle" type="button" aria-label="테마 전환">
+        <span class="sun-icon">🌞</span>
+        <span class="moon-icon">🌙</span>
+        <span id="themeLabel">다크 모드</span>
+      </button>
+      <h1>이미지 이어붙이기 — 썸네일 정렬</h1>
+    </header>
+
+    <section class="panel">
+      <div class="section-title">업로드 · 정렬</div>
+
+      <!-- 업로드/파일 선택 블록 -->
+      <div class="uploader" id="uploader">
+        <input id="fileInput" class="input" type="file" accept="image/*" multiple />
+        <button id="sortAsc" class="btn">이름순</button>
+        <button id="sortDesc" class="btn">이름 역순</button>
+        <div class="dropzone" id="dropzone">여기로 끌어다 놓기</div>
+      </div>
+
+      <!-- 보기 툴바 (업로드 블록 바로 아래) -->
+      <div class="toolbar" style="margin-top:10px">
+        <span class="small">보기</span>
+        <button id="viewGrid"  class="btn btn-chip active">그리드</button>
+        <button id="viewFixed" class="btn btn-chip">고정열</button>
+        <button id="viewFilm2" class="btn btn-chip">2줄 필름</button>
+
+        <span class="small" style="margin-left:.6rem">크기</span>
+        <input id="thumbSize" type="range" min="80" max="220" step="10" value="120" />
+        <output id="thumbSizeOut" class="small">120px</output>
+
+        <div id="colsWrap" class="small" style="display:none;align-items:center;gap:.35rem">
+          <span>열</span>
+          <input id="colsInput" type="number" min="2" max="12" value="6" class="input" style="width:78px" />
+        </div>
+
+        <div class="spacer"></div>
+        <button id="openBoard" class="btn btn-chip">크게 보기</button>
+      </div>
+
+      <!-- 썸네일들이 "업로드/파일 선택" 영역 아래에 머무름 -->
+      <div class="thumb-wrap">
+        <div id="thumbContainer" class="thumb-grid" aria-live="polite"></div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 대형 정렬 보드 -->
+  <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="대형 정렬 보드">
+    <div class="card">
+      <div class="head">
+        <strong>대형 정렬 보드</strong>
+        <div class="spacer"></div>
+        <span class="small">열</span>
+        <input id="boardCols" type="number" min="4" max="12" value="8" class="input" style="width:78px" />
+        <span class="small">크기</span>
+        <input id="boardSize" type="range" min="90" max="240" step="10" value="140" />
+        <output id="boardSizeOut" class="small">140px</output>
+        <button id="closeBoard" class="btn">닫기</button>
+      </div>
+      <div id="boardGrid" class="thumb-grid fixed board-grid" style="--thumbCols:8;--thumbSize:140px"></div>
+    </div>
+  </div>
+
+<script>
+/* ========= 상태 ========= */
+let images = []; // { src, name, rotation }
+let mode = 'grid';   // 'grid' | 'fixed' | 'film2'
+let cols = 6;
+let sizePx = 120;
+
+/* ========= 요소 ========= */
+const themeToggle = document.getElementById('themeToggle');
+const themeLabel  = document.getElementById('themeLabel');
+
+const fileInput   = document.getElementById('fileInput');
+const dropzone    = document.getElementById('dropzone');
+const sortAsc     = document.getElementById('sortAsc');
+const sortDesc    = document.getElementById('sortDesc');
+
+const thumbContainer = document.getElementById('thumbContainer');
+const viewGrid  = document.getElementById('viewGrid');
+const viewFixed = document.getElementById('viewFixed');
+const viewFilm2 = document.getElementById('viewFilm2');
+const thumbSize = document.getElementById('thumbSize');
+const thumbSizeOut = document.getElementById('thumbSizeOut');
+const colsWrap  = document.getElementById('colsWrap');
+const colsInput = document.getElementById('colsInput');
+
+const overlay    = document.getElementById('overlay');
+const boardGrid  = document.getElementById('boardGrid');
+const openBoard  = document.getElementById('openBoard');
+const closeBoard = document.getElementById('closeBoard');
+const boardCols  = document.getElementById('boardCols');
+const boardSize  = document.getElementById('boardSize');
+const boardSizeOut = document.getElementById('boardSizeOut');
+
+/* ========= 테마 ========= */
+function applyTheme(next){
+  if(next==='dark'){ document.body.classList.add('dark-mode'); themeLabel.textContent='라이트 모드'; }
+  else{ document.body.classList.remove('dark-mode'); themeLabel.textContent='다크 모드'; }
+  localStorage.setItem('thumbTheme', next);
+}
+(function initTheme(){
+  const saved = localStorage.getItem('thumbTheme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  applyTheme(saved || (prefersDark ? 'dark' : 'light'));
+})();
+themeToggle.addEventListener('click',()=>{
+  const isDark = document.body.classList.contains('dark-mode');
+  applyTheme(isDark? 'light':'dark');
+});
+
+/* ========= 파일 로드 ========= */
+function loadFiles(fileList){
+  const files = Array.from(fileList || []);
+  if(!files.length) return;
+  let remain = files.length;
+  files.forEach(file=>{
+    const reader = new FileReader();
+    reader.onload = e=>{
+      images.push({ src:e.target.result, name:file.name || 'image', rotation:0 });
+      if(--remain===0){ rerenderAll(); }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+fileInput.addEventListener('change', e=> loadFiles(e.target.files));
+
+/* 드롭 */
+;['dragenter','dragover'].forEach(evt=>{
+  dropzone.addEventListener(evt, e=>{e.preventDefault(); e.stopPropagation(); dropzone.classList.add('drag');});
+});
+;['dragleave','drop'].forEach(evt=>{
+  dropzone.addEventListener(evt, e=>{e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('drag');});
+});
+dropzone.addEventListener('drop', e=> loadFiles(e.dataTransfer.files));
+
+/* ========= 정렬 ========= */
+sortAsc.addEventListener('click', ()=>{
+  images.sort((a,b)=> a.name.localeCompare(b.name, 'ko'));
+  rerenderAll();
+});
+sortDesc.addEventListener('click', ()=>{
+  images.sort((a,b)=> b.name.localeCompare(a.name, 'ko'));
+  rerenderAll();
+});
+
+/* ========= 썸네일 렌더러 ========= */
+function applyLayout(container){
+  container.classList.remove('fixed','film2');
+  container.style.setProperty('--thumbSize', sizePx + 'px');
+  if(mode==='fixed'){
+    container.classList.add('fixed');
+    container.style.setProperty('--thumbCols', cols);
+  }else if(mode==='film2'){
+    container.classList.add('film2');
+  }
+}
+function renderInto(container){
+  container.innerHTML = '';
+  images.forEach((o, i)=>{
+    const cell = document.createElement('div');
+    cell.className = 'thumb'; cell.draggable = true; cell.dataset.index = i;
+
+    const img = document.createElement('img');
+    img.src = o.src; img.alt = o.name; img.style.transform = `rotate(${o.rotation}deg)`;
+
+    const badge = document.createElement('div');
+    badge.className = 'index-badge'; badge.textContent = i+1;
+
+    const tools = document.createElement('div');
+    tools.className = 'tools';
+    const rotBtn = document.createElement('button'); rotBtn.className='btn'; rotBtn.textContent='↻';
+    const delBtn = document.createElement('button'); delBtn.className='btn'; delBtn.textContent='삭제';
+    rotBtn.onclick = ()=>{ o.rotation = (o.rotation + 90) % 360; rerenderAll(); };
+    delBtn.onclick = ()=>{ images.splice(i,1); rerenderAll(); };
+    tools.append(rotBtn, delBtn);
+
+    const hint = document.createElement('div');
+    hint.className = 'drag-hint'; hint.textContent = '드래그로 순서 변경';
+
+    /* Drag & Drop reorder */
+    cell.addEventListener('dragstart', e=>{
+      e.dataTransfer.setData('text/plain', i);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    cell.addEventListener('dragover', e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; });
+    cell.addEventListener('drop', e=>{
+      e.preventDefault();
+      const from = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const to = i;
+      if(isNaN(from) || from===to) return;
+      const [moved] = images.splice(from,1);
+      images.splice(to,0,moved);
+      rerenderAll();
+    });
+
+    cell.append(img, badge, tools, hint);
+    container.appendChild(cell);
+  });
+  applyLayout(container);
+}
+function rerenderAll(){
+  renderInto(thumbContainer);
+  if(!overlay.classList.contains('hidden')) renderInto(boardGrid);
+}
+
+/* ========= 보기 모드/옵션 ========= */
+function setActive(btn){ [viewGrid,viewFixed,viewFilm2].forEach(b=>b.classList.toggle('active', b===btn)); }
+viewGrid.addEventListener('click', ()=>{ mode='grid'; setActive(viewGrid); colsWrap.style.display='none'; rerenderAll(); });
+viewFixed.addEventListener('click',()=>{ mode='fixed'; setActive(viewFixed); colsWrap.style.display='inline-flex'; rerenderAll(); });
+viewFilm2.addEventListener('click',()=>{ mode='film2'; setActive(viewFilm2); colsWrap.style.display='none'; rerenderAll(); });
+
+thumbSize.addEventListener('input', ()=>{
+  sizePx = parseInt(thumbSize.value,10) || 120;
+  thumbSizeOut.textContent = sizePx + 'px';
+  rerenderAll();
+});
+colsInput.addEventListener('input', ()=>{
+  cols = Math.max(2, Math.min(12, parseInt(colsInput.value,10) || 6));
+  rerenderAll();
+});
+
+/* ========= 대형 보드 ========= */
+openBoard.addEventListener('click', ()=>{
+  overlay.classList.remove('hidden');
+  boardGrid.classList.add('fixed');
+  boardGrid.style.setProperty('--thumbCols', boardCols.value);
+  boardGrid.style.setProperty('--thumbSize', boardSize.value + 'px');
+  boardSizeOut.textContent = boardSize.value + 'px';
+  renderInto(boardGrid);
+});
+closeBoard.addEventListener('click', ()=> overlay.classList.add('hidden'));
+boardCols.addEventListener('input', ()=>{
+  const val = Math.max(4, Math.min(12, parseInt(boardCols.value,10) || 8));
+  boardGrid.style.setProperty('--thumbCols', val);
+});
+boardSize.addEventListener('input', ()=>{
+  boardGrid.style.setProperty('--thumbSize', boardSize.value + 'px');
+  boardSizeOut.textContent = boardSize.value + 'px';
+});
+
+/* ========= 초기 ========= */
+rerenderAll();
+</script>
+</body>
+</html>
