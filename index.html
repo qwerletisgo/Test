@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이미지 이어붙이기 v4.3 (원본 미리보기·배율컨트롤)</title>
+<style>
+:root{
+  --bg:#1e1e1e; --panel:rgba(50,50,50,0.88); --text:#f0f0f0; --muted:#bbb; --border:#3a3a3a;
+  --accent:#666; --accent2:#555; --line:#555;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{font-family:"Pretendard","Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;line-height:1.45}
+h1{margin:0 0 12px;text-align:center;font-weight:600}
+.container{max-width:980px;margin:auto}
+.option-box{background:var(--panel);backdrop-filter:blur(6px);padding:18px 20px;border-radius:14px;margin:16px 0;border:1px solid var(--border);box-shadow:0 0 10px rgba(0,0,0,.3)}
+.option-box h3{margin:0 0 12px}
+button,input,select{background:#333;color:#eee;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:4px;transition:.15s;min-height:42px;touch-action:manipulation}
+button:hover{background:var(--accent2);cursor:pointer}
+button.active{background:var(--accent);color:#fff;border-color:#555}
+input[type="number"]{width:140px}
+label{margin-right:10px}
+.small{font-size:13px;color:#aaa}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:6px 0}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.thin-line{height:2px;background:var(--line);border-radius:1px;margin:10px 0}
+
+/* 썸네일 */
+.thumb-list{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.thumb{position:relative;width:120px;height:90px;overflow:hidden;border:2px solid #555;border-radius:8px;user-select:none}
+.thumb img{width:100%;height:100%;object-fit:cover;transform-origin:center center;pointer-events:none}
+.thumb .index-label{position:absolute;top:5px;left:6px;background:rgba(0,0,0,.72);padding:2px 6px;font-size:12px;border-radius:4px}
+.thumb .btns{position:absolute;right:4px;bottom:4px;display:flex;gap:4px}
+.thumb button.small{padding:3px 6px;font-size:11px;min-height:auto}
+
+/* 결과 미리보기 뷰어 */
+canvas{max-width:100%;border:1px solid #666;border-radius:10px;background:transparent}
+#statusLine{text-align:center;margin:8px 0;color:#ccc}
+#timer{text-align:center;color:var(--muted);margin-top:8px}
+.result-grid{display:grid;grid-template-columns:1fr;gap:12px}
+.box{padding:12px;background:#2b2b2b;border:1px solid var(--border);border-radius:12px}
+.box h4{margin:0 0 8px;color:#ddd}
+
+#resultViewer{display:flex;flex-direction:column;gap:8px}
+#viewerControls{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+#resultScroll{border:1px solid #666;border-radius:10px;overflow:auto;max-height:70vh;background:#111}
+#resultImg{display:block;image-rendering:auto}
+
+/* 로딩 */
+#loadingOverlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;flex-direction:column;justify-content:center;align-items:center;z-index:999;text-align:center;padding:16px}
+#loadingOverlay img{width:auto;max-width:420px;height:auto;object-fit:contain;margin-bottom:12px}
+#loadingText{font-size:18px}
+#loadingText .dots::after{content:'...';animation:dots 1s steps(3,end) infinite}
+@keyframes dots{0%{content:'';}33%{content:'.';}66%{content:'..';}100%{content:'...';}}
+
+/* 상단 모드 토글 */
+#modeToggle{display:block;margin:10px auto}
+
+/* 고급 옵션 */
+#advancedOptions{display:none;margin-top:8px;background:#2b2b2b;padding:12px;border-radius:10px;border:1px solid var(--border)}
+.disabledHint{opacity:.55}
+
+/* 폭 버튼 그리드 */
+.width-grid{display:flex;flex-wrap:wrap;gap:8px}
+.width-grid .widthBtn{flex:1 1 100px}
+
+/* 모바일 */
+@media (max-width:620px){
+  .row{flex-direction:column;align-items:flex-start}
+  .group{width:100%}
+  .width-grid{width:100%}
+  input[type="number"], select{width:100%}
+  #modeToggle{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>이미지 이어붙이기 v4.3</h1>
+
+  <!-- 상태 + 모드 -->
+  <div id="statusLine">모드: 세로 | 폭: 자동 | 형식: JPEG</div>
+  <button id="modeToggle">현재: 세로로 붙이기 모드 🔽</button>
+
+  <!-- ① 업로드 -->
+  <div class="option-box">
+    <h3>① 이미지 업로드 및 순서 설정</h3>
+    <div class="row">
+      <input type="file" id="fileInput" multiple accept="image/*">
+      <div class="group">
+        <button id="sortName">이름순 정렬</button>
+        <button id="sortNameReverse">이름 역순</button>
+      </div>
+      <span class="small">💡 클립보드 이미지(Ctrl+V)로도 추가 가능</span>
+    </div>
+    <div class="small">썸네일: 드래그로 순서 변경 / ↻ 회전 / ❌ 삭제</div>
+    <div id="thumbContainer" class="thumb-list"></div>
+  </div>
+
+  <!-- ② 옵션 -->
+  <div class="option-box">
+    <h3>② 옵션 설정</h3>
+
+    <!-- 가로 크기 -->
+    <div class="row">
+      <label>가로 크기 (폭 기준):</label>
+      <div class="group width-grid">
+        <button class="widthBtn active" data-width="auto">자동</button>
+        <button class="widthBtn" data-width="720">720</button>
+        <button class="widthBtn" data-width="1280">1280 <small>(추천)</small></button>
+        <button class="widthBtn" data-width="1920">1920 <small>(추천)</small></button>
+        <button class="widthBtn" data-width="2560">2560</button>
+        <button class="widthBtn" data-width="3840">3840</button>
+        <input type="number" id="customWidth" placeholder="수동입력(px)">
+      </div>
+    </div>
+
+    <div class="thin-line"></div>
+
+    <!-- 비율/레이아웃 -->
+    <div class="row">
+      <label>비율 / 레이아웃:</label>
+      <div class="group">
+        <label><input type="radio" name="layoutMode" value="scale" checked> 비율 유지 (확대/축소)</label>
+        <label><input type="radio" name="layoutMode" value="pad"> 패딩 맞춤 (폭 통일, 비율 유지)</label>
+      </div>
+    </div>
+    <div class="row" id="padControls" style="display:none">
+      <label>정렬:</label>
+      <div class="group">
+        <label><input type="radio" name="padAlign" value="left"> 좌</label>
+        <label><input type="radio" name="padAlign" value="center" checked> 가운데</label>
+        <label><input type="radio" name="padAlign" value="right"> 우</label>
+      </div>
+      <label>배경:</label>
+      <select id="padBg">
+        <option value="transparent" selected>투명 (PNG 전용)</option>
+        <option value="#ffffff">흰색 #fff</option>
+        <option value="#000000">검정 #000</option>
+      </select>
+      <span class="small">※ JPEG에서는 투명이 자동으로 흰색 처리</span>
+    </div>
+
+    <div class="thin-line"></div>
+
+    <!-- 간격 -->
+    <div class="row">
+      <label>이미지 간격(px):</label>
+      <input type="number" id="gapInput" value="0" min="0">
+    </div>
+
+    <div class="thin-line"></div>
+
+    <!-- 포맷 -->
+    <div class="row">
+      <label>출력 형식:</label>
+      <div class="group">
+        <label><input type="radio" name="format" value="image/jpeg" checked> JPEG (손실)</label>
+        <label><input type="radio" name="format" value="image/png"> PNG (무손실)</label>
+      </div>
+    </div>
+
+    <div class="thin-line"></div>
+
+    <!-- 고급 옵션 -->
+    <div class="row">
+      <button id="advancedToggle">고급 옵션 ▾</button>
+    </div>
+    <div id="advancedOptions">
+      <div class="row" id="qualityRow">
+        <label>JPEG 품질 (권장 90% 이상):</label>
+        <div class="group">
+          <input type="number" id="qualityInput" min="50" max="100" step="1" value="100">
+          <span>%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ 결과 -->
+  <div class="option-box">
+    <h3>③ 결과</h3>
+    <div class="row">
+      <button id="mergeBtn">이미지 합치기</button>
+      <button id="downloadBtn" disabled>다운로드</button>
+    </div>
+    <div id="timer"></div>
+    <div class="thin-line"></div>
+
+    <div class="result-grid">
+      <div class="box" id="resultViewer">
+        <h4>미리보기</h4>
+        <div id="viewerControls">
+          <span class="small">배율:</span>
+          <button class="zoomBtn" data-zoom="0.25">25%</button>
+          <button class="zoomBtn" data-zoom="0.5">50%</button>
+          <button class="zoomBtn" data-zoom="1">100%(1:1)</button>
+          <button class="zoomFit" data-mode="fit-width">폭맞춤</button>
+          <button id="openNew">새 탭으로 열기</button>
+        </div>
+        <div id="resultScroll">
+          <!-- 원본 미리보기 이미지 -->
+          <img id="resultImg" alt="미리보기(원본)" />
+          <!-- 다운로드/블롭 생성용 캔버스는 화면에 보이지 않게 유지 -->
+          <canvas id="resultCanvas" style="display:none"></canvas>
+        </div>
+      </div>
+
+      <div class="box"><h4>미리보기 축소형</h4><canvas id="previewCanvas"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- 로딩 오버레이 -->
+<div id="loadingOverlay">
+  <img id="loadingGif" src="loading.gif" alt="loading">
+  <div id="loadingText">가은이가 열심히 만들고 있어요! 💫<span class="dots"></span></div>
+</div>
+
+<script>
+/* 요소 */
+const fileInput=document.getElementById('fileInput');
+const thumbContainer=document.getElementById('thumbContainer');
+const mergeBtn=document.getElementById('mergeBtn');
+const downloadBtn=document.getElementById('downloadBtn');
+const canvas=document.getElementById('resultCanvas'); const ctx=canvas.getContext('2d');
+const previewCanvas=document.getElementById('previewCanvas'); const pctx=previewCanvas.getContext('2d');
+const resultImg=document.getElementById('resultImg');
+const resultScroll=document.getElementById('resultScroll');
+const openNew=document.getElementById('openNew');
+
+const timerEl=document.getElementById('timer');
+const loadingOverlay=document.getElementById('loadingOverlay');
+const statusLine=document.getElementById('statusLine');
+const modeToggle=document.getElementById('modeToggle');
+
+const advancedToggle=document.getElementById('advancedToggle');
+const advancedOptions=document.getElementById('advancedOptions');
+const qualityInput=document.getElementById('qualityInput');
+const qualityRow=document.getElementById('qualityRow');
+
+const padControls=document.getElementById('padControls');
+const padBg=document.getElementById('padBg');
+
+/* 상태 */
+let mode='vertical', images=[], selectedWidth='auto', selectedFormat='image/jpeg';
+let quality=1.0; // 0.50~1.00
+const MAX_TOTAL_MB=300;
+
+let currentBlobURL=null; // 미리보기용 URL
+let currentZoomMode='explicit'; // 'explicit' or 'fit-width'
+let currentZoom=1;
+
+/* 헬퍼 */
+function currentLayoutMode(){
+  return document.querySelector('input[name="layoutMode"]:checked').value; // 'scale' | 'pad'
+}
+function getPadAlign(){
+  const el=document.querySelector('input[name="padAlign"]:checked');
+  return el?el.value:'center';
+}
+function parseQuality(vRaw){
+  let s=String(vRaw??'').trim().replace('%','');
+  let n=Number(s);
+  if(!isFinite(n)) n=100;
+  if(n>0 && n<=1) n*=100;
+  n=Math.round(n); n=Math.max(50,Math.min(100,n));
+  return n;
+}
+
+/* 상태 표시 */
+function updateStatus(){
+  const w=(selectedWidth==='auto')?'자동':selectedWidth+'px';
+  const m=(mode==='vertical')?'세로':'가로';
+  const f=(selectedFormat==='image/jpeg')?'JPEG':'PNG';
+  statusLine.textContent=`모드: ${m} | 폭: ${w} | 형식: ${f}`;
+  modeToggle.textContent=(mode==='vertical')?'현재: 세로로 붙이기 모드 🔽':'현재: 가로로 붙이기 모드 ▶️';
+
+  const jpegMode=(selectedFormat==='image/jpeg');
+  qualityInput.disabled=!jpegMode;
+  qualityRow.classList.toggle('disabledHint',!jpegMode);
+
+  const transparentOpt=[...padBg.options].find(o=>o.value==='transparent');
+  transparentOpt.disabled = (selectedFormat==='image/jpeg');
+  if(selectedFormat==='image/jpeg' && padBg.value==='transparent'){ padBg.value='#ffffff'; }
+
+  padControls.style.display = (currentLayoutMode()==='pad') ? 'flex' : 'none';
+}
+updateStatus();
+
+/* 모드 토글 */
+modeToggle.onclick=()=>{ mode=(mode==='vertical')?'horizontal':'vertical'; updateStatus(); };
+
+/* 고급 옵션 토글 */
+advancedToggle.onclick=()=>{ advancedOptions.style.display=(advancedOptions.style.display==='block')?'none':'block'; };
+
+/* 레이아웃 */
+document.querySelectorAll('input[name="layoutMode"]').forEach(r=>r.addEventListener('change',updateStatus));
+
+/* 품질 입력 */
+function syncQualityFromInput(){
+  const v=parseQuality(qualityInput.value);
+  qualityInput.value=v; quality=v/100;
+}
+qualityInput.addEventListener('input',syncQualityFromInput);
+qualityInput.addEventListener('change',syncQualityFromInput);
+
+/* 폭 버튼 */
+document.querySelectorAll('.widthBtn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.widthBtn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedWidth=(btn.dataset.width==='auto')?'auto':parseInt(btn.dataset.width,10);
+    updateStatus();
+  });
+});
+
+/* 포맷 */
+document.querySelectorAll('input[name="format"]').forEach(r=>{
+  r.addEventListener('change',()=>{ selectedFormat=document.querySelector('input[name="format"]:checked').value; updateStatus(); });
+});
+
+/* 업로드 (총합 용량만 제한) */
+fileInput.addEventListener('change',()=>{
+  const files=Array.from(fileInput.files);
+  const totalMB=files.reduce((s,f)=>s+f.size,0)/(1024*1024);
+  if(totalMB>MAX_TOTAL_MB){ alert(`총 용량이 너무 큽니다 (≤ ${MAX_TOTAL_MB}MB)`); return; }
+  images=[];
+  files.forEach(f=>{
+    const r=new FileReader();
+    r.onload=e=>{ images.push({src:e.target.result,name:f.name,rotation:0}); renderThumbs(); };
+    r.readAsDataURL(f);
+  });
+});
+
+/* 썸네일 */
+function renderThumbs(){
+  thumbContainer.innerHTML='';
+  images.forEach((imgObj,i)=>{
+    const d=document.createElement('div'); d.className='thumb'; d.draggable=true; d.dataset.index=i;
+    const img=document.createElement('img'); img.src=imgObj.src; img.style.transform=`rotate(${imgObj.rotation}deg)`;
+    const lab=document.createElement('div'); lab.className='index-label'; lab.textContent=i+1;
+    const bs=document.createElement('div'); bs.className='btns';
+    const rot=document.createElement('button'); rot.textContent='↻'; rot.className='small';
+    rot.onclick=()=>{ imgObj.rotation=(imgObj.rotation+90)%360; renderThumbs(); };
+    const del=document.createElement('button'); del.textContent='❌'; del.className='small';
+    del.onclick=()=>{ images.splice(i,1); renderThumbs(); };
+    bs.append(rot,del); d.append(img,lab,bs); thumbContainer.append(d);
+
+    d.addEventListener('dragstart',e=>e.dataTransfer.setData('text/plain',i));
+    d.addEventListener('dragover',e=>e.preventDefault());
+    d.addEventListener('drop',e=>{
+      e.preventDefault();
+      const from=parseInt(e.dataTransfer.getData('text/plain'),10), to=i;
+      if(from!==to){ const t=images.splice(from,1)[0]; images.splice(to,0,t); renderThumbs(); }
+    });
+  });
+}
+
+/* 정렬 */
+document.getElementById('sortName').onclick=()=>{ images.sort((a,b)=>a.name.localeCompare(b.name,'ko')); renderThumbs(); };
+document.getElementById('sortNameReverse').onclick=()=>{ images.sort((a,b)=>b.name.localeCompare(a.name,'ko')); renderThumbs(); };
+
+/* 병합 */
+mergeBtn.addEventListener('click',()=>mergeNow(mode));
+
+async function mergeNow(targetMode){
+  if(!images.length){ alert('이미지를 먼저 업로드하세요.'); return; }
+  loadingOverlay.style.display='flex';
+  const start=performance.now();
+
+  const gap=parseInt(document.getElementById('gapInput').value||'0',10);
+  const custom=parseInt(document.getElementById('customWidth').value||'0',10);
+  const format=selectedFormat;
+  const layout=currentLayoutMode();
+  const align=getPadAlign();
+  const bgChoice=padBg.value;
+
+  const loaded=await Promise.all(images.map(loadImage));
+
+  // 회전 반영 폭/높이
+  const effWidths = loaded.map((img, idx)=>{
+    const rot=images[idx].rotation||0;
+    return (rot%180===0)?img.width:img.height;
+  });
+  let baseWidth=(selectedWidth==='auto')?Math.max(...effWidths):selectedWidth;
+  if(custom>0) baseWidth=custom;
+
+  const items=[];
+  for(let i=0;i<loaded.length;i++){
+    const img=loaded[i];
+    const rot=(images[i].rotation||0)%360;
+    const rad=rot*Math.PI/180;
+
+    const origW=img.width, origH=img.height;
+    const effW=(rot%180===0)?origW:origH;
+    const effH=(rot%180===0)?origH:origW;
+
+    let s;
+    if(layout==='pad'){ s=(effW>baseWidth)?(baseWidth/effW):1; }
+    else{ s=baseWidth/effW; }
+
+    const drawW_eff=effW*s, drawH_eff=effH*s;
+    const drawW_src=origW*s, drawH_src=origH*s;
+
+    items.push({img,rot,rad,drawW_eff,drawH_eff,drawW_src,drawH_src});
+  }
+
+  // 캔버스 크기
+  if(targetMode==='vertical'){
+    canvas.width=baseWidth;
+    canvas.height=items.reduce((sum,it)=>sum+it.drawH_eff,0)+gap*(items.length-1);
+  }else{
+    if(layout==='pad') canvas.width=baseWidth*items.length+gap*(items.length-1);
+    else canvas.width=items.reduce((s,it)=>s+it.drawW_eff,0)+gap*(items.length-1);
+    canvas.height=Math.max(...items.map(it=>it.drawH_eff));
+  }
+
+  // 배경
+  if(format==='image/png' && bgChoice==='transparent'){ ctx.clearRect(0,0,canvas.width,canvas.height); }
+  else{
+    const fill=(layout==='pad') ? (bgChoice==='transparent' ? '#ffffff' : bgChoice) : (format==='image/jpeg' ? '#ffffff' : '#ffffff');
+    ctx.fillStyle=fill; ctx.fillRect(0,0,canvas.width,canvas.height);
+  }
+
+  // 그리기
+  if(targetMode==='vertical'){
+    let y=0;
+    for(const it of items){
+      const tileW=baseWidth, tileH=it.drawH_eff;
+      let x=0;
+      if(layout==='pad'){
+        if(align==='left') x=0; else if(align==='center') x=(tileW-it.drawW_eff)/2; else x=(tileW-it.drawW_eff);
+        if(!(format==='image/png' && bgChoice==='transparent')){
+          ctx.fillStyle=(bgChoice==='transparent')?'#ffffff':bgChoice; ctx.fillRect(0,y,tileW,tileH);
+        }
+      }
+      ctx.save(); ctx.translate(x+it.drawW_eff/2, y+it.drawH_eff/2); ctx.rotate(it.rad);
+      ctx.drawImage(it.img, -it.drawW_src/2, -it.drawH_src/2, it.drawW_src, it.drawH_src);
+      ctx.restore();
+      y+=tileH+gap;
+    }
+  }else{
+    let xStart=0;
+    for(const it of items){
+      const tileW=(layout==='pad')?baseWidth:it.drawW_eff;
+      const tileH=it.drawH_eff;
+      let innerX=0;
+      if(layout==='pad'){
+        if(align==='left') innerX=0; else if(align==='center') innerX=(tileW-it.drawW_eff)/2; else innerX=(tileW-it.drawW_eff);
+        if(!(format==='image/png' && bgChoice==='transparent')){
+          ctx.fillStyle=(bgChoice==='transparent')?'#ffffff':bgChoice; ctx.fillRect(xStart,0,tileW,tileH);
+        }
+      }
+      ctx.save(); ctx.translate(xStart+innerX+it.drawW_eff/2, tileH/2); ctx.rotate(it.rad);
+      ctx.drawImage(it.img, -it.drawW_src/2, -it.drawH_src/2, it.drawW_src, it.drawH_src);
+      ctx.restore();
+      xStart+=tileW+gap;
+    }
+  }
+
+  const elapsed=((performance.now()-start)/1000).toFixed(2);
+
+  /* 미리보기 축소형(안전용) */
+  const maxPreviewPixels=3000000;
+  const totalPx=canvas.width*canvas.height;
+  const scalePixels=Math.min(1,Math.sqrt(maxPreviewPixels/Math.max(1,totalPx)));
+  const scaleBox=Math.min(700/canvas.width,380/canvas.height,1);
+  const scale=Math.min(scalePixels,scaleBox,1);
+  previewCanvas.width=Math.max(1,Math.floor(canvas.width*scale));
+  previewCanvas.height=Math.max(1,Math.floor(canvas.height*scale));
+  pctx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+  pctx.drawImage(canvas,0,0,previewCanvas.width,previewCanvas.height);
+
+  // 예상 용량 & MP + 다운로드 & 원본 미리보기 이미지 세팅
+  const q=(format==='image/jpeg')?quality:undefined;
+  canvas.toBlob(blob=>{
+    const mb=(blob.size/1024/1024).toFixed(2);
+    const mp=(canvas.width*canvas.height/1000000).toFixed(1);
+    timerEl.textContent=`처리 완료 (${elapsed}초) | ${images.length}장 | ${canvas.width}×${canvas.height} (${mp}MP) | ${mode==='vertical'?'세로':'가로'} | ${format.split('/')[1].toUpperCase()} | 예상 용량: ${mb}MB`;
+
+    // 원본 미리보기 이미지로 표시 (전체 보기 가능)
+    if(currentBlobURL){ URL.revokeObjectURL(currentBlobURL); currentBlobURL=null; }
+    currentBlobURL=URL.createObjectURL(blob);
+    resultImg.src=currentBlobURL;
+
+    // 초기 배율: 폭맞춤
+    setZoomFitWidth();
+
+    // 다운로드
+    downloadBtn.disabled=false;
+    downloadBtn.onclick=()=>{
+      canvas.toBlob(dBlob=>{
+        const url=URL.createObjectURL(dBlob);
+        const a=document.createElement('a');
+        const d=new Date();
+        const stamp=`${d.getFullYear()}${(d.getMonth()+1+"").padStart(2,"0")}${(d.getDate()+"").padStart(2,"0")}_${(d.getHours()+"").padStart(2,"0")}${(d.getMinutes()+"").padStart(2,"0")}`;
+        const name=`merged_${stamp}`+(format==='image/png'?'.png':'.jpg');
+        a.href=url; a.download=name; a.click();
+        setTimeout(()=>URL.revokeObjectURL(url),1000);
+      }, format, q);
+    };
+
+    loadingOverlay.style.display='none';
+  }, format, q);
+}
+
+/* 유틸 */
+function loadImage(o){ return new Promise(res=>{ const i=new Image(); i.onload=()=>res(i); i.src=o.src; }); }
+
+/* 클립보드 붙여넣기 */
+document.addEventListener('paste',e=>{
+  const items=e.clipboardData?.items; if(!items) return;
+  for(const item of items){
+    if(item.type.startsWith('image/')){
+      const blob=item.getAsFile();
+      const r=new FileReader();
+      r.onload=ev=>{ images.push({src:ev.target.result,name:'clipboard_'+(images.length+1)+'.png',rotation:0}); renderThumbs(); };
+      r.readAsDataURL(blob);
+    }
+  }
+});
+
+/* 정렬 */
+document.getElementById('sortName').onclick=()=>{ images.sort((a,b)=>a.name.localeCompare(b.name,'ko')); renderThumbs(); };
+document.getElementById('sortNameReverse').onclick=()=>{ images.sort((a,b)=>b.name.localeCompare(a.name,'ko')); renderThumbs(); };
+
+/* ===== 미리보기(원본) 배율 컨트롤 ===== */
+function setZoomExplicit(z){
+  currentZoomMode='explicit'; currentZoom=z;
+  if(!canvas.width) return;
+  resultImg.style.width = Math.max(1, Math.floor(canvas.width * z)) + 'px';
+}
+function setZoomFitWidth(){
+  currentZoomMode='fit-width';
+  if(!canvas.width) return;
+  const pad = 16; // 스크롤 컨테이너 패딩 여유
+  const avail = resultScroll.clientWidth - pad;
+  const z = Math.max(0.05, Math.min(4, avail / canvas.width));
+  currentZoom=z;
+  resultImg.style.width = Math.floor(canvas.width * z) + 'px';
+}
+window.addEventListener('resize',()=>{ if(currentZoomMode==='fit-width') setZoomFitWidth(); });
+
+document.querySelectorAll('.zoomBtn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    const z=parseFloat(btn.dataset.zoom||'1');
+    setZoomExplicit(z);
+  });
+});
+document.querySelector('.zoomFit').addEventListener('click', setZoomFitWidth);
+
+openNew.addEventListener('click',()=>{
+  if(currentBlobURL){ window.open(currentBlobURL, '_blank'); }
+});
+
+/* 초기 */
+renderThumbs();
+</script>
+</body>
+</html>
