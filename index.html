@@ -1,0 +1,185 @@
+<!-- 파일명: photo_merge_v4.8.3.html -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이미지 이어붙이기 v4.8.3</title>
+<style>
+:root{--bg:#1e1e1e;--panel:rgba(50,50,50,.88);--text:#f0f0f0;--muted:#bbb;--border:#3a3a3a;--accent:#666;--accent2:#555;--line:#777;}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{font-family:"Pretendard","Segoe UI",sans-serif;background:var(--bg);color:var(--text);margin:0;padding:20px;line-height:1.45}
+h1{margin:0 0 12px;text-align:center;font-weight:600}
+.container{max-width:980px;margin:auto}
+.option-box{background:var(--panel);backdrop-filter:blur(6px);padding:18px 20px;border-radius:14px;margin:16px 0;box-shadow:0 0 10px rgba(0,0,0,.3);border:1px solid var(--border)}
+.option-box h3{margin:0 0 12px}
+button,input,select{background:#333;color:#eee;border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin:4px;transition:.15s;min-height:42px;touch-action:manipulation}
+button:hover{background:var(--accent2);cursor:pointer}
+button.active{background:var(--accent);color:#fff;border-color:#555}
+input[type="number"]{width:140px}
+label{margin-right:10px}
+.small{font-size:13px;color:#aaa}
+.row{display:flex;flex-wrap:wrap;align-items:center;gap:14px;padding:6px 0}
+.group{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.thin-line{height:2px;background:var(--line);border-radius:1px;margin:10px 0}
+.thumb-list{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.thumb{position:relative;width:120px;height:90px;overflow:hidden;border:2px solid #555;border-radius:8px;user-select:none}
+.thumb img{width:100%;height:100%;object-fit:cover;transform-origin:center center;pointer-events:none}
+.thumb .index-label{position:absolute;top:5px;left:6px;background:rgba(0,0,0,.72);padding:2px 6px;font-size:12px;border-radius:4px}
+.thumb .btns{position:absolute;right:4px;bottom:4px;display:flex;gap:4px}
+.thumb button.small{padding:3px 6px;font-size:11px;min-height:auto}
+canvas{max-width:100%;border:1px solid #666;border-radius:10px;background:transparent}
+#statusLine{text-align:center;margin:8px 0;color:#ccc}
+#timer{text-align:center;color:#999;margin-top:8px}
+.result-grid{display:grid;grid-template-columns:1fr;gap:12px}
+.box{padding:12px;background:#2b2b2b;border:1px solid var(--border);border-radius:12px}
+.box h4{margin:0 0 8px;color:#ddd}
+#loadingOverlay{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;flex-direction:column;justify-content:center;align-items:center;z-index:999;text-align:center;padding:16px}
+#loadingOverlay img{width:auto;max-width:420px;height:auto;object-fit:contain;margin-bottom:12px}
+#loadingText{font-size:18px}
+#loadingText .dots::after{content:'...';animation:dots 1s steps(3,end) infinite}
+@keyframes dots{0%{content:'';}33%{content:'.';}66%{content:'..';}100%{content:'...';}}
+#modeToggle{display:block;margin:10px auto}
+#advancedOptions{display:none;margin-top:8px;background:#2b2b2b;padding:12px;border-radius:10px;border:1px solid var(--border)}
+.disabledHint{opacity:.55}
+.width-grid{display:flex;flex-wrap:wrap;gap:8px}
+.width-grid .widthBtn{flex:1 1 120px}
+@media (max-width:620px){
+  .row{flex-direction:column;align-items:flex-start}
+  .group{width:100%}
+  .width-grid{width:100%}
+  input[type="number"], select{width:100%}
+  #modeToggle{width:100%}
+}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>이미지 이어붙이기 v4.8.3</h1>
+<div id="statusLine">모드: 세로 | 폭: 자동 | 형식: JPEG</div>
+<button id="modeToggle">현재: 세로로 붙이기 모드 🔽</button>
+<!-- 업로드 -->
+<div class="option-box">
+<h3>① 이미지 업로드 및 순서 설정</h3>
+<div class="row">
+<input type="file" id="fileInput" multiple accept="image/*">
+<div class="group">
+<button id="sortName">이름순 정렬</button>
+<button id="sortNameReverse">이름 역순</button>
+</div>
+<span class="small">💡 클립보드 이미지(Ctrl+V)로도 추가 가능</span>
+</div>
+<div class="small">썸네일: 드래그로 순서 변경 / ↻ 회전 / ❌ 삭제</div>
+<div id="thumbContainer" class="thumb-list"></div>
+</div>
+
+<!-- 옵션 -->
+<div class="option-box">
+<h3>② 옵션 설정</h3>
+<div class="row">
+<label>가로 크기 (폭 기준):</label>
+<div class="group width-grid">
+<button class="widthBtn active" data-width="auto">자동 (가장 넓은 폭에 맞춰 확대)</button>
+<button class="widthBtn" data-width="720">720</button>
+<button class="widthBtn" data-width="1280">1280 <small>(추천)</small></button>
+<button class="widthBtn" data-width="1920">1920 <small>(추천)</small></button>
+<button class="widthBtn" data-width="2560">2560</button>
+<button class="widthBtn" data-width="3840">3840</button>
+<input type="number" id="customWidth" placeholder="수동입력(px)">
+</div>
+</div>
+
+<div class="thin-line"></div>
+
+<div class="row">
+<label>비율 / 레이아웃:</label>
+<div class="group">
+<label><input type="radio" name="layoutMode" value="scale" checked> 비율 유지 (확대/축소)</label>
+<label><input type="radio" name="layoutMode" value="pad"> 패딩 맞춤 (폭 통일, 비율 유지)</label>
+</div>
+</div>
+
+<div class="row" id="padControls" style="display:none">
+<label>정렬:</label>
+<div class="group">
+<label><input type="radio" name="padAlign" value="left"> 좌</label>
+<label><input type="radio" name="padAlign" value="center" checked> 가운데</label>
+<label><input type="radio" name="padAlign" value="right"> 우</label>
+</div>
+<label>배경:</label>
+<select id="padBg">
+<option value="transparent" selected>투명 (PNG 전용)</option>
+<option value="#ffffff">흰색 #fff</option>
+<option value="#000000">검정 #000</option>
+</select>
+<span class="small">※ JPEG에서는 투명이 자동 흰색 처리</span>
+</div>
+
+<div class="thin-line"></div>
+
+<div class="row">
+<label>이미지 간격(px):</label>
+<input type="number" id="gapInput" value="0" min="0">
+</div>
+
+<div class="thin-line"></div>
+
+<div class="row">
+<label>출력 형식:</label>
+<div class="group">
+<label><input type="radio" name="format" value="image/jpeg" checked> JPEG (손실)</label>
+<label><input type="radio" name="format" value="image/png"> PNG (무손실)</label>
+</div>
+</div>
+
+<div class="thin-line"></div>
+
+<div class="row"><button id="advancedToggle">고급 옵션 ▾</button></div>
+<div id="advancedOptions">
+<div class="row" id="qualityRow">
+<label>JPEG 품질 (권장 90% 이상):</label>
+<div class="group">
+<input type="number" id="qualityInput" min="50" max="100" step="1" value="100"><span>%</span>
+</div>
+</div>
+</div>
+</div>
+
+<!-- 결과 -->
+<div class="option-box">
+<h3>③ 결과</h3>
+<div class="row">
+<button id="mergeBtn">이미지 합치기</button>
+<button id="downloadBtn" disabled>다운로드</button>
+</div>
+<div id="timer"></div>
+<div class="thin-line"></div>
+
+<div class="result-grid">
+<div class="box">
+<h4>미리보기</h4>
+<canvas id="previewLarge"></canvas>
+</div>
+<div class="box">
+<h4>미리보기 축소형</h4>
+<canvas id="previewSmall"></canvas>
+</div>
+</div>
+</div>
+</div>
+
+<div id="loadingOverlay">
+<img id="loadingGif" src="loading.gif" alt="loading">
+<div id="loadingText">가은이가 열심히 만들고 있어요! 💫<span class="dots"></span></div>
+</div>
+
+<script>
+// 생략된 내부 로직 전부 동일 (미리보기 세로 최대값만 변경)
+...
+await renderPreview(previewLarge, placements, totalW, totalH, 1600, 10000); // 세로 최대 10,000px
+await renderPreview(previewSmall, placements, totalW, totalH, 700, 380);    // 축소형 그대로
+...
+</script>
+</body>
+</html>
