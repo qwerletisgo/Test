@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>채용 시뮬레이터</title>
+<style>
+/* ---------------------- 기본 테마 팔레트 (라이트) ---------------------- */
+:root{
+  --bg:#f3f6fb;
+  --card:#ffffff;
+  --text:#0f172a;
+  --text-dim:#5b6476;
+  --line:#e6ebf3;
+  --brand:#3da3ff;
+  --brand-2:#2575fc;
+  --chip:#e8f2ff;
+  --chip-text:#1356c7;
+  --input:#f7f9fd;
+  --input-border:#d8dfeb;
+  --shadow:0 10px 24px rgba(15,23,42,.08);
+}
+/* ---------------------- 다크 테마 팔레트 ---------------------- */
+.theme-dark{
+  --bg:#0f1420;
+  --card:#151b28;
+  --text:#eef2ff;
+  --text-dim:#97a2b8;
+  --line:#263145;
+  --brand:#5aa8ff;
+  --brand-2:#367bff;
+  --chip:#243249;
+  --chip-text:#b9d6ff;
+  --input:#0f1420;
+  --input-border:#2a354a;
+  --shadow:0 10px 24px rgba(0,0,0,.45);
+}
+
+/* ---------------------- 레이아웃 ---------------------- */
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  -webkit-font-smoothing:antialiased; line-height:1.5;
+}
+.container{max-width:980px; margin:24px auto; padding:0 14px}
+
+/* ---------------------- 헤더 카드 ---------------------- */
+.header{
+  position:relative;
+  background:linear-gradient(180deg, rgba(53,94,180,.15), rgba(22,30,45,.08)) , var(--card);
+  border:1px solid var(--line);
+  box-shadow:var(--shadow);
+  border-radius:20px; padding:22px 20px 26px 20px;
+}
+.header-top{
+  display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+}
+.theme-toggle{
+  border:none; background:var(--chip); color:var(--chip-text);
+  padding:10px 16px; border-radius:999px; font-weight:700; letter-spacing:.2px;
+  display:inline-flex; align-items:center; gap:8px; cursor:pointer;
+  box-shadow:inset 0 0 0 1px rgba(19,86,199,.15);
+}
+.theme-toggle:hover{filter:brightness(1.03)}
+.version{
+  text-align:right; color:var(--text-dim); font-size:13px; line-height:1.25;
+}
+.header-title{
+  margin-top:14px; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+}
+h1{margin:0; font-size:28px; letter-spacing:.3px}
+
+/* 탭 */
+.tabs{display:flex; gap:12px; margin-top:14px}
+.tab{
+  border:none; cursor:pointer; user-select:none;
+  padding:12px 18px; border-radius:14px; font-weight:700;
+  color:#fff; background:linear-gradient(180deg,var(--brand),var(--brand-2));
+  box-shadow:0 8px 20px rgba(37,117,252,.28);
+}
+.tab.secondary{
+  background:var(--chip); color:var(--chip-text); box-shadow:none;
+}
+.tab:disabled{opacity:.55; cursor:not-allowed}
+
+/* ---------------------- 카드 섹션 ---------------------- */
+.card{
+  margin-top:18px; background:var(--card); border:1px solid var(--line);
+  border-radius:18px; box-shadow:var(--shadow); padding:18px 16px 20px;
+}
+.card h2{margin:4px 6px 14px; font-size:22px}
+.hr{height:2px; background:linear-gradient(90deg,var(--brand),transparent); border:0; margin:-4px 6px 14px}
+
+/* 폼 공통 */
+.row{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin:12px 6px}
+label{min-width:150px; color:var(--text-dim); font-weight:700}
+input, select{
+  background:var(--input); color:var(--text);
+  border:1px solid var(--input-border); padding:12px 12px;
+  border-radius:12px; font-size:16px; outline:none; min-width:280px;
+}
+input[disabled]{opacity:.7}
+.input-wrap{position:relative; display:inline-flex}
+.suffix{
+  position:absolute; right:6px; top:6px; bottom:6px; display:flex; align-items:center;
+  padding:0 10px; border-left:1px solid var(--input-border); color:var(--text-dim);
+  background:transparent; border-radius:0 10px 10px 0; pointer-events:none;
+}
+
+/* 세그먼트 버튼 */
+.segs{display:flex; gap:10px; flex-wrap:wrap}
+.seg{
+  padding:10px 14px; border-radius:12px; border:1px solid var(--input-border);
+  background:var(--input); color:var(--text); font-weight:700; cursor:pointer;
+}
+.seg.active{border-color:transparent; color:#fff; background:linear-gradient(180deg,var(--brand),var(--brand-2))}
+
+/* 도움말 */
+.hint{margin: -4px 6px 0; color:var(--text-dim); font-size:13px}
+
+/* 반응형 */
+@media (max-width:600px){
+  label{min-width:110px}
+  input,select{min-width:unset; width:100%}
+  .row{flex-direction:column; align-items:flex-start}
+  .version{width:100%; text-align:right}
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- 헤더 -->
+  <section class="header" id="header">
+    <div class="header-top">
+      <button class="theme-toggle" id="themeBtn" aria-label="테마 전환">
+        <span id="themeIcon">🌙</span><span id="themeText">다크 모드</span>
+      </button>
+      <div class="version">
+        <div>Version: <strong id="ver">1.0.0</strong></div>
+        <div>Last Updated: <strong id="updated">2025.7.18</strong></div>
+      </div>
+    </div>
+
+    <div class="header-title">
+      <h1>채용 시뮬레이터</h1>
+    </div>
+
+    <div class="tabs">
+      <button class="tab" aria-current="page">시뮬레이터</button>
+      <button class="tab secondary">나의 운 분석기</button>
+      <button class="tab secondary" disabled>가격 설정</button>
+    </div>
+  </section>
+
+  <!-- 본문 카드 -->
+  <section class="card">
+    <h2>시뮬레이터 설정</h2>
+    <hr class="hr"/>
+
+    <div class="row">
+      <label for="type">채용 종류</label>
+      <select id="type">
+        <option>기밀채용</option>
+        <option>일반채용</option>
+        <option>특수채용</option>
+      </select>
+    </div>
+
+    <div class="row">
+      <label for="cost">1회당 비용 (자동 계산)</label>
+      <div class="input-wrap">
+        <input id="cost" type="number" step="0.01" value="1000.00" disabled />
+        <span class="suffix">원</span>
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="tries">채용 시도 횟수</label>
+      <div class="input-wrap">
+        <input id="tries" type="number" value="1000" />
+        <span class="suffix">회</span>
+      </div>
+    </div>
+    <div class="hint">기채권 20,000장</div>
+
+    <div class="row" style="margin-top:16px">
+      <label>목표 성공 횟수</label>
+      <div class="segs" id="goalSegs">
+        <button class="seg active" data-v="명함">명함</button>
+        <button class="seg" data-v="3돌">3돌</button>
+        <button class="seg" data-v="6돌">6돌</button>
+        <button class="seg" data-v="오퍼 만렙">오퍼 만렙</button>
+        <button class="seg" data-v="직접 입력">직접 입력</button>
+      </div>
+    </div>
+
+    <div class="row">
+      <label for="goal">　</label>
+      <div class="input-wrap">
+        <input id="goal" type="number" value="1" />
+        <span class="suffix">회 이상</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+/* ---------------------- 테마 토글 ---------------------- */
+const root = document.documentElement;
+const btn = document.getElementById('themeBtn');
+const icon = document.getElementById('themeIcon');
+const text = document.getElementById('themeText');
+
+// 초기 테마: localStorage > OS 선호
+const saved = localStorage.getItem('theme');
+const preferDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+if(saved==='dark' || (!saved && preferDark)){ setDark(true); }
+else { setDark(false); }
+
+btn.addEventListener('click', () => {
+  const isDark = document.body.classList.toggle('theme-dark');
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  applyToggleLabel(isDark);
+});
+
+function setDark(on){
+  document.body.classList.toggle('theme-dark', on);
+  applyToggleLabel(on);
+}
+function applyToggleLabel(isDark){
+  // 버튼에는 "전환할 모드"를 표기 (스크린샷과 동일한 UX)
+  if(isDark){
+    icon.textContent = '☀️';
+    text.textContent = '라이트 모드';
+  }else{
+    icon.textContent = '🌙';
+    text.textContent = '다크 모드';
+  }
+}
+
+/* ---------------------- 세그먼트(선택 토글) ---------------------- */
+document.getElementById('goalSegs').addEventListener('click', (e)=>{
+  if(!(e.target instanceof HTMLElement)) return;
+  const b = e.target.closest('.seg'); if(!b) return;
+  document.querySelectorAll('#goalSegs .seg').forEach(x=>x.classList.remove('active'));
+  b.classList.add('active');
+  // 예시 동작: "직접 입력" 선택 시 입력창 포커스
+  if(b.dataset.v === '직접 입력') document.getElementById('goal').focus();
+});
+</script>
+</body>
+</html>
